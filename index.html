@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>跨交易所滑点与差价转换计算器</title>
+    <style>
+        /* 定义全局 CSS 变量：浅色模式 (默认) */
+        :root {
+            --bg-base: #f4f7f9;
+            /* 浅色模式交叉线条背景 */
+            --bg-pattern:
+                repeating-linear-gradient(45deg, rgba(44, 62, 80, 0.04) 0px, rgba(44, 62, 80, 0.04) 1px, transparent 1px, transparent 20px),
+                repeating-linear-gradient(-45deg, rgba(44, 62, 80, 0.04) 0px, rgba(44, 62, 80, 0.04) 1px, transparent 1px, transparent 20px);
+
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --text-main: #2c3e50;
+            --text-muted: #7f8c8d;
+            --border-color: #dcdde1;
+            --primary-color: #3498db;
+            --success-color: #27ae60;
+            --danger-color: #e74c3c;
+            --input-bg: #ffffff;
+            --result-bg: rgba(248, 249, 250, 0.6);
+            --highlight-bg: rgba(255, 255, 255, 0.9);
+            --shadow-color: rgba(0, 0, 0, 0.08);
+            --support-link-color: #00d924;
+        }
+
+        .crypto-btn {
+            display: inline-block;
+            padding: 6px 14px;
+            background: linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%);
+            color: #ffffff;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 16px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(58, 123, 213, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .crypto-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(58, 123, 213, 0.4);
+            color: #ffffff;
+        }
+
+        .crypto-btn:active {
+            transform: translateY(1px);
+            box-shadow: 0 2px 10px rgba(58, 123, 213, 0.3);
+        }
+
+        /* 定义全局 CSS 变量：深色模式 */
+        [data-theme="dark"] {
+            --bg-base: #0f172a;
+            /* 深色模式交叉线条背景 */
+            --bg-pattern:
+                repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.03) 0px, rgba(255, 255, 255, 0.03) 1px, transparent 1px, transparent 20px),
+                repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.03) 0px, rgba(255, 255, 255, 0.03) 1px, transparent 1px, transparent 20px);
+
+            --card-bg: rgba(30, 41, 59, 0.75);
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --primary-color: #38bdf8;
+            --success-color: #4ade80;
+            --danger-color: #f87171;
+            --input-bg: #1e293b;
+            --result-bg: rgba(15, 23, 42, 0.4);
+            --highlight-bg: rgba(30, 41, 59, 0.9);
+            --shadow-color: rgba(0, 0, 0, 0.3);
+            --support-link-color: #fffb00;
+        }
+
+        body {
+            font-family: 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-base);
+            background-image: var(--bg-pattern);
+            color: var(--text-main);
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+            transition: background-color 0.4s ease, color 0.4s ease;
+        }
+
+        .container {
+            background-color: var(--card-bg);
+            /* 毛玻璃特效 */
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 35px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px var(--shadow-color);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            width: 100%;
+            max-width: 550px;
+            position: relative;
+            transition: all 0.4s ease;
+        }
+
+        /* 主题切换按钮 */
+        .theme-toggle {
+            position: absolute;
+            top: 25px;
+            right: 25px;
+            background: none;
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 6px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.2s ease;
+        }
+
+        .theme-toggle:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        h2 {
+            text-align: center;
+            margin-top: 10px;
+            margin-bottom: 30px;
+            color: var(--text-main);
+            font-size: 22px;
+            transition: color 0.4s ease;
+        }
+
+        .section-title {
+            font-size: 14px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 5px;
+            transition: all 0.4s ease;
+        }
+
+        .input-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .input-group.full-width {
+            grid-column: span 2;
+        }
+
+        label {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--text-muted);
+            transition: color 0.4s ease;
+        }
+
+        input[type="number"] {
+            padding: 12px;
+            background-color: var(--input-bg);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 15px;
+            outline: none;
+            transition: all 0.25s ease;
+            box-sizing: border-box;
+            width: 100%;
+        }
+
+        input[type="number"]:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+        }
+
+        .result-panel {
+            background-color: var(--result-bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 25px;
+            border: 1px solid var(--border-color);
+            transition: all 0.4s ease;
+        }
+
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px dashed var(--border-color);
+            transition: border-color 0.4s ease;
+        }
+
+        .result-row:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+            margin-bottom: 0;
+        }
+
+        .result-row:first-child {
+            padding-top: 0;
+        }
+
+        .result-label {
+            font-size: 14px;
+            color: var(--text-muted);
+            transition: color 0.4s ease;
+        }
+
+        .result-value {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-main);
+            transition: color 0.4s ease;
+        }
+
+        .result-row.highlight {
+            background-color: var(--highlight-bg);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            margin: 8px 0;
+            transition: all 0.4s ease;
+        }
+
+        .result-row.highlight .result-value {
+            font-size: 18px;
+            color: var(--primary-color);
+        }
+
+        .profit-positive {
+            color: var(--success-color) !important;
+        }
+
+        .profit-negative {
+            color: var(--danger-color) !important;
+        }
+
+        .footer-note {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-align: center;
+            margin-top: 25px;
+            line-height: 1.6;
+            transition: color 0.4s ease;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+
+        <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()">
+            🌗 切换主题
+        </button>
+
+        <h2>跨交易所滑点与差价转换计算器</h2>
+
+        <div class="section-title">请自行输入参数</div>
+        <div class="input-grid">
+            <div class="input-group">
+                <label for="priceA">交易所 A 价格 (SafeTrade)</label>
+                <input type="number" id="priceA" placeholder="例如: 100" step="any" value="42.89">
+            </div>
+            <div class="input-group">
+                <label for="priceB">交易所 B 价格 (Gate.io/Okex)</label>
+                <input type="number" id="priceB" placeholder="例如: 101.5" step="any" value="42.69">
+            </div>
+            <div class="input-group full-width">
+                <label for="amountA">在交易所 A 购买的金额(USDT)</label>
+                <input type="number" id="amountA" placeholder="输入本金，例如: 10 USDT" step="any" value="10">
+            </div>
+        </div>
+
+        <div class="section-title">计算结果</div>
+        <div class="result-panel">
+            <div class="result-row">
+                <span class="result-label">绝对差价：</span>
+                <span class="result-value" id="outDiff">0.0000</span>
+            </div>
+            <div class="result-row">
+                <span class="result-label">滑点百分比：</span>
+                <span class="result-value" id="outSlippage">0.00%</span>
+            </div>
+            <div class="result-row">
+                <span class="result-label">可购得资产数量：</span>
+                <span class="result-value" id="outQuantity">0.0000</span>
+            </div>
+            <div class="result-row highlight">
+                <span class="result-label">交易所 B 等值金额(USDT)：</span>
+                <span class="result-value" id="outAmountB">0.0000</span>
+            </div>
+            <div class="result-row">
+                <span class="result-label">预期净利润(USDT)：</span>
+                <span class="result-value" id="outProfit">0.0000</span>
+            </div>
+            <div class="result-row">
+                <span class="result-label">预计收益率 (ROI)：</span>
+                <span class="result-value" id="outRoi">0.00%</span>
+            </div>
+        </div>
+
+        <div class="footer-note">
+            <strong>计算公式说明：</strong><br>
+            数量 = 金额A ÷ 价格A | 金额B = 数量 × 价格B <br>
+            利润 = 金额B - 金额A | 滑点 = (|价格A - 价格B| ÷ 价格A) × 100%<br>
+            <span style="color: #0a6b03;">* 提示：实际操作中请自行扣除两端交易手续费及链上转账(Gas)费。</span>
+            <br>
+            <span style="color: #bc6303;">* 社区群：276293617 作者QQ 2420036409</span>
+            <br>
+            <span class="support-link" style="color: var(--support-link-color);">支持链接
+                <div style="display: flex; gap: 10px; justify-content: center; margin-top: 8px;">
+                    <a href="https://www.oqmmpieralz.com/join/43513365" target="_blank" class="crypto-btn">
+                        欧易OKX
+                    </a>
+                    <a
+                        href="https://www.gatewebsite.net/zh/referral/registry?ref=AVBAAVFZ&ref_type=103&page=superRebate"
+                        target="_blank" class="crypto-btn">
+                        芝麻开门Gate.io
+                    </a>
+
+                </div>
+                *享受30%手续费折扣*
+            </span>
+        </div>
+    </div>
+    <script>
+        // === 1. 深色/浅色模式切换逻辑 ===
+        function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+
+            // 设置新主题
+            html.setAttribute('data-theme', newTheme);
+
+            // 本地存储用户偏好，刷新页面不丢失
+            localStorage.setItem('theme', newTheme);
+        }
+
+        // 页面加载时读取系统或用户之前保存的主题偏好
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) {
+                document.documentElement.setAttribute('data-theme', savedTheme);
+            } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                // 如果用户系统设为深色模式，则默认启用深色
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+
+            // 运行初始计算
+            doCalculation();
+        });
+
+
+        // === 2. 实时计算逻辑 ===
+        const inPriceA = document.getElementById('priceA');
+        const inPriceB = document.getElementById('priceB');
+        const inAmountA = document.getElementById('amountA');
+
+        const outDiff = document.getElementById('outDiff');
+        const outSlippage = document.getElementById('outSlippage');
+        const outQuantity = document.getElementById('outQuantity');
+        const outAmountB = document.getElementById('outAmountB');
+        const outProfit = document.getElementById('outProfit');
+        const outRoi = document.getElementById('outRoi');
+
+        function doCalculation() {
+            const priceA = parseFloat(inPriceA.value);
+            const priceB = parseFloat(inPriceB.value);
+            const amountA = parseFloat(inAmountA.value);
+
+            if (!isNaN(priceA) && !isNaN(priceB) && !isNaN(amountA) && priceA > 0) {
+                const diff = Math.abs(priceA - priceB);
+                const slippage = (diff / priceA) * 100;
+                const quantity = amountA / priceA;
+                const amountB = quantity * priceB;
+                const profit = amountB - amountA;
+                const roi = amountA > 0 ? (profit / amountA) * 100 : 0;
+
+                outDiff.textContent = diff.toFixed(4);
+                outSlippage.textContent = slippage.toFixed(2) + '%';
+                outQuantity.textContent = quantity.toFixed(4);
+                outAmountB.textContent = amountB.toFixed(4);
+                outProfit.textContent = (profit >= 0 ? '+' : '') + profit.toFixed(4);
+                outRoi.textContent = (roi >= 0 ? '+' : '') + roi.toFixed(2) + '%';
+
+                if (profit > 0) {
+                    outProfit.className = "result-value profit-positive";
+                    outRoi.className = "result-value profit-positive";
+                } else if (profit < 0) {
+                    outProfit.className = "result-value profit-negative";
+                    outRoi.className = "result-value profit-negative";
+                } else {
+                    outProfit.className = "result-value";
+                    outRoi.className = "result-value";
+                }
+            } else {
+                outDiff.textContent = '0.0000';
+                outSlippage.textContent = '0.00%';
+                outQuantity.textContent = '0.0000';
+                outAmountB.textContent = '0.0000';
+                outProfit.textContent = '0.0000';
+                outRoi.textContent = '0.00%';
+                outProfit.className = "result-value";
+                outRoi.className = "result-value";
+            }
+        }
+
+        inPriceA.addEventListener('input', doCalculation);
+        inPriceB.addEventListener('input', doCalculation);
+        inAmountA.addEventListener('input', doCalculation);
+    </script>
+</body>
+
+</html>
